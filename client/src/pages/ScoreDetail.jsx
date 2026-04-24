@@ -151,14 +151,21 @@ const ScoreDetail = () => {
         if (!synth || !isAudioReady) return;
         
         const notesToPlay = (score?.notes && score.notes.length > 0) ? score.notes : SAMPLE_NOTES;
-        
+
+        const BPM = 120;
+        const secondsPerBeat = 60 / BPM;
+        Tone.Transport.bpm.value = BPM;
+
+        // Duration in beats (quarter note = 1 beat)
+        const durationBeats = {
+            'whole': 4, 'half': 2, 'quarter': 1, 'eighth': 0.5, 'sixteenth': 0.25
+        };
+        // Tone.js duration string
         const durationMap = {
-            'whole': '1m', 'half': '2n', 'quarter': '4n',
-            'eighth': '8n', 'sixteenth': '16n'
+            'whole': '1m', 'half': '2n', 'quarter': '4n', 'eighth': '8n', 'sixteenth': '16n'
         };
 
-        let timeAcc = Tone.Time("0");
-        Tone.Transport.bpm.value = 120; // Default tempo
+        let timeAccSeconds = 0;
 
         notesToPlay.forEach((entry, index) => {
             const isChord = Array.isArray(entry);
@@ -169,31 +176,30 @@ const ScoreDetail = () => {
                 return { ...n, duration: n.duration || 'quarter', dotted: n.dotted || false };
             });
 
-            let durationStr = durationMap[normalized[0].duration] || '4n';
-            if (normalized[0].dotted) durationStr += '.';
-            
+            const durName = normalized[0].duration;
+            const dotted = normalized[0].dotted || false;
+            const beats = (durationBeats[durName] || 1) * (dotted ? 1.5 : 1);
+            const durationStr = (durationMap[durName] || '4n') + (dotted ? '.' : '');
             const pitches = normalized.map(n => n.note);
-            
+            const scheduleAt = timeAccSeconds;
+
             Tone.Transport.schedule((time) => {
                 synth.triggerAttackRelease(pitches, durationStr, time);
-                
-                // Sync cursor highlighting
                 Tone.Draw.schedule(() => {
                     setCurrentNoteIndex(index);
                 }, time);
-            }, timeAcc.toSeconds());
-            
-            timeAcc = Tone.Time(timeAcc.toSeconds() + Tone.Time(durationStr).toSeconds());
+            }, scheduleAt);
+
+            timeAccSeconds += beats * secondsPerBeat;
         });
 
-        // Stop callback at the end
-        Tone.Transport.schedule((time) => {
-            Tone.Draw.schedule(() => {
-                setIsPlayingAudio(false);
-                setCurrentNoteIndex(0); // Reset cursor when done
-            }, time);
+        // Use a setTimeout to stop after all notes finish (with 2s buffer for release tails)
+        const totalDurationMs = (timeAccSeconds + 2.0) * 1000;
+        setTimeout(() => {
             Tone.Transport.stop();
-        }, timeAcc.toSeconds() + 0.5);
+            setIsPlayingAudio(false);
+            setCurrentNoteIndex(0);
+        }, totalDurationMs);
 
         Tone.Transport.start();
         setIsPlayingAudio(true);
