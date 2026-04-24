@@ -445,7 +445,7 @@ const Practice = () => {
                             width: '480px',
                             maxWidth: '95%'
                         }}>
-                            <MusicSheet notes={currentNotes} currentIndex={currentNoteIndex} />
+                            <MusicSheet notes={currentNotes} currentIndex={currentNoteIndex} playedUpTo={isPlaying ? currentNoteIndex - 1 : -1} />
                         </div>
                     ) : (
                         <div className="absolute inset-0 flex flex-col items-center justify-center gap-4 text-black/40 animate-pulse py-8">

@@ -18,17 +18,61 @@ const ScoreDetail = () => {
     const [loading, setLoading] = useState(true);
     const [detectedNote, setDetectedNote] = useState(null);
     const [isPlayingAudio, setIsPlayingAudio] = useState(false);
+    const [isAudioReady, setIsAudioReady] = useState(false);
 
     const audioContextRef = useRef();
     const analyserRef = useRef();
     const streamRef = useRef();
     const requestRef = useRef();
     const handleNoteInputRef = useRef();
+    const synthRef = useRef();
 
     useEffect(() => {
+        // Inisialisasi sampler dengan suara piano asli (Salamander Grand Piano)
+        synthRef.current = new Tone.Sampler({
+            urls: {
+                A0: "A0.mp3",
+                C1: "C1.mp3",
+                "D#1": "Ds1.mp3",
+                "F#1": "Fs1.mp3",
+                A1: "A1.mp3",
+                C2: "C2.mp3",
+                "D#2": "Ds2.mp3",
+                "F#2": "Fs2.mp3",
+                A2: "A2.mp3",
+                C3: "C3.mp3",
+                "D#3": "Ds3.mp3",
+                "F#3": "Fs3.mp3",
+                A3: "A3.mp3",
+                C4: "C4.mp3",
+                "D#4": "Ds4.mp3",
+                "F#4": "Fs4.mp3",
+                A4: "A4.mp3",
+                C5: "C5.mp3",
+                "D#5": "Ds5.mp3",
+                "F#5": "Fs5.mp3",
+                A5: "A5.mp3",
+                C6: "C6.mp3",
+                "D#6": "Ds6.mp3",
+                "F#6": "Fs6.mp3",
+                A6: "A6.mp3",
+                C7: "C7.mp3",
+                "D#7": "Ds7.mp3",
+                "F#7": "Fs7.mp3",
+                A7: "A7.mp3",
+                C8: "C8.mp3"
+            },
+            release: 1,
+            baseUrl: "https://tonejs.github.io/audio/salamander/",
+            onload: () => {
+                setIsAudioReady(true);
+            }
+        }).toDestination();
+
         return () => {
             Tone.Transport.stop();
             Tone.Transport.cancel(0);
+            if (synthRef.current) synthRef.current.dispose();
         };
     }, []);
 
@@ -103,11 +147,8 @@ const ScoreDetail = () => {
         await Tone.start();
         Tone.Transport.cancel(0);
         
-        // Create a synth and connect it to the main output (your speakers)
-        const synth = new Tone.PolySynth(Tone.Synth, {
-            oscillator: { type: "triangle" },
-            envelope: { attack: 0.01, decay: 0.1, sustain: 0.3, release: 1 }
-        }).toDestination();
+        const synth = synthRef.current;
+        if (!synth || !isAudioReady) return;
         
         const notesToPlay = (score?.notes && score.notes.length > 0) ? score.notes : SAMPLE_NOTES;
         
@@ -119,7 +160,7 @@ const ScoreDetail = () => {
         let timeAcc = Tone.Time("0");
         Tone.Transport.bpm.value = 120; // Default tempo
 
-        notesToPlay.forEach(entry => {
+        notesToPlay.forEach((entry, index) => {
             const isChord = Array.isArray(entry);
             const notes = isChord ? entry : [entry];
             
@@ -135,6 +176,11 @@ const ScoreDetail = () => {
             
             Tone.Transport.schedule((time) => {
                 synth.triggerAttackRelease(pitches, durationStr, time);
+                
+                // Sync cursor highlighting
+                Tone.Draw.schedule(() => {
+                    setCurrentNoteIndex(index);
+                }, time);
             }, timeAcc.toSeconds());
             
             timeAcc = Tone.Time(timeAcc.toSeconds() + Tone.Time(durationStr).toSeconds());
@@ -142,7 +188,10 @@ const ScoreDetail = () => {
 
         // Stop callback at the end
         Tone.Transport.schedule((time) => {
-            setIsPlayingAudio(false);
+            Tone.Draw.schedule(() => {
+                setIsPlayingAudio(false);
+                setCurrentNoteIndex(0); // Reset cursor when done
+            }, time);
             Tone.Transport.stop();
         }, timeAcc.toSeconds() + 0.5);
 
@@ -259,9 +308,14 @@ const ScoreDetail = () => {
                 <div className="flex gap-4">
                     <button 
                         onClick={toggleAudioPlayback}
-                        className={`flex items-center justify-center gap-2 px-6 py-2.5 rounded-xl font-bold text-sm transition-all whitespace-nowrap min-w-[140px] ${isPlayingAudio ? 'bg-error text-white shadow-md shadow-error/20' : 'bg-secondary text-text-main shadow-md hover:scale-105 active:scale-95'}`}
+                        disabled={!isAudioReady}
+                        className={`flex items-center justify-center gap-2 px-6 py-2.5 rounded-xl font-bold text-sm transition-all whitespace-nowrap min-w-[140px] 
+                            ${!isAudioReady ? 'bg-gray-200 text-gray-400 cursor-not-allowed' : 
+                              isPlayingAudio ? 'bg-error text-white shadow-md shadow-error/20' : 
+                              'bg-secondary text-text-main shadow-md hover:scale-105 active:scale-95'}`}
                     >
-                        {isPlayingAudio ? <><Square size={16} /> Stop Audio</> : <><Play size={16} /> Mainkan Audio</>}
+                        {!isAudioReady ? <><Loader2 size={16} className="animate-spin"/> Memuat Suara...</> :
+                         isPlayingAudio ? <><Square size={16} /> Stop Audio</> : <><Play size={16} /> Mainkan Audio</>}
                     </button>
 
                     <button 
@@ -284,7 +338,11 @@ const ScoreDetail = () => {
                 </div>
 
                 <div className="bg-white rounded-3xl p-6 h-auto flex flex-col relative overflow-auto shadow-xl border border-gray-100">
-                    <MusicSheet notes={score?.notes || []} currentIndex={currentNoteIndex} />
+                    <MusicSheet 
+                        notes={score?.notes || []} 
+                        currentIndex={currentNoteIndex} 
+                        playingIndex={isPlayingAudio ? currentNoteIndex : -1}
+                    />
                 </div>
             </div>
 
