@@ -3,21 +3,22 @@ import { Renderer, Stave, StaveNote, Voice, Formatter, Accidental, StaveConnecto
 import { motion, AnimatePresence } from 'framer-motion';
 
 const NoteShatter = ({ x, y }) => {
-    const particles = Array.from({ length: 12 });
+    const particles = Array.from({ length: 6 }); // Kurangi partikel agar lebih ringan
     return (
         <div className="absolute pointer-events-none z-50" style={{ left: x, top: y }}>
             {particles.map((_, i) => (
                 <motion.div
                     key={i}
-                    initial={{ x: 0, y: 0, opacity: 1 }}
+                    initial={{ x: 0, y: 0, opacity: 1, scale: 1 }}
                     animate={{
-                        x: (Math.random() - 0.5) * 120,
-                        y: (Math.random() - 0.5) * 120,
+                        x: (Math.random() - 0.5) * 80,
+                        y: (Math.random() - 0.5) * 80,
                         opacity: 0,
-                        scale: 0
+                        scale: 0.2
                     }}
-                    transition={{ duration: 0.6, ease: "easeOut" }}
-                    className="absolute w-2 h-2 bg-success rounded-full shadow-md"
+                    transition={{ duration: 0.4, ease: "easeOut" }}
+                    className="absolute w-2 h-2 bg-success rounded-full shadow-sm"
+                    style={{ willChange: 'transform, opacity' }}
                 />
             ))}
         </div>
@@ -73,9 +74,13 @@ const MusicSheet = ({ notes = [], currentIndex = 0 }) => {
             });
 
             if (hasAccidental) vfNote.addModifier(new Accidental('#'), 0);
-            vfNote.setAttribute('id', `vf-note-${idx}`);
-            //vfNote.setStyle({ fillStyle: '#0f172a', strokeStyle: '#0f172a' });
-            vfNote.setStyle({ fillStyle: '#999', strokeStyle: '#999' });
+
+            // Paksa ID dan Class masuk ke SVG DOM (VexFlow 5)
+            // VexFlow akan otomatis menambahkan prefix 'vf-' di depannya, jadi kita cukup beri 'note-idx'
+            vfNote.setAttribute('id', `note-${idx}`);
+            vfNote.setAttribute('class', `vf-note-group note-${idx}`);
+
+            vfNote.setStyle({ fillStyle: '#64748b', strokeStyle: '#64748b' });
 
 
             if (isBass) {
@@ -100,34 +105,43 @@ const MusicSheet = ({ notes = [], currentIndex = 0 }) => {
         prevIndexRef.current = 0;
     }, [notes]);
 
-    // 2. Logic Update Warna & Animasi (Fading Bulatan)
     useEffect(() => {
-        if (!containerRef.current) return;
+        const updateColors = () => {
+            if (!containerRef.current) return;
 
-        notes.forEach((_, idx) => {
-            const noteEl = document.getElementById(`vf-note-${idx}`);
-            if (!noteEl) return;
+            notes.forEach((_, idx) => {
+                // Cari berdasarkan ID yang dihasilkan VexFlow (otomatis diprefix 'vf-')
+                const noteEl = document.getElementById(`vf-note-${idx}`);
+                if (!noteEl) return;
 
-            const noteHead = noteEl.querySelector('.vf-notehead');
-            const noteHeadPaths = noteHead ? noteHead.querySelectorAll('path, text') : [];
-            const stemPaths = noteEl.querySelectorAll('.vf-stem path');
+                const allPaths = noteEl.querySelectorAll('path, text, g');
+                const noteHead = noteEl.querySelector('.vf-notehead') || noteEl;
 
-            stemPaths.forEach(p => {
-                // p.style.fill = '#0f172a';
-                // p.style.stroke = '#0f172a';
+                let targetColor = '#64748b'; // Slate 500
+                let targetOpacity = '1';
+                let targetTransform = 'translateY(0)';
 
-                p.style.fill = '#777';
-                p.style.stroke = '#777';
-            });
-
-            if (idx < currentIndex) {
-                if (noteHead) {
-                    noteHead.style.transition = 'all 0.8s ease-out';
-                    noteHead.style.opacity = '0.1'; // Biarkan sedikit berbayang
-                    noteHead.style.transform = 'translateY(-20px)';
-                    noteHeadPaths.forEach(p => p.style.fill = '#10b981');
+                if (idx < currentIndex) {
+                    targetColor = '#10b981'; // Success Green
+                    targetOpacity = '1'; // Tetap terlihat jelas
+                    targetTransform = 'translateY(0)'; // Tetap di posisi semula
                 }
 
+                allPaths.forEach(p => {
+                    p.style.fill = targetColor;
+                    p.style.stroke = targetColor;
+                    p.style.transition = 'all 0.3s ease';
+                    if (p.hasAttribute('fill')) p.setAttribute('fill', targetColor);
+                    if (p.hasAttribute('stroke')) p.setAttribute('stroke', targetColor);
+                });
+
+                if (noteHead) {
+                    noteHead.style.transition = 'all 0.8s ease-out';
+                    noteHead.style.opacity = targetOpacity;
+                    noteHead.style.transform = targetTransform;
+                }
+
+                // Shatter effect
                 if (idx === currentIndex - 1 && idx !== prevIndexRef.current - 1) {
                     const data = notePositionsRef.current[idx];
                     if (data && data.note.getMetrics) {
@@ -139,28 +153,14 @@ const MusicSheet = ({ notes = [], currentIndex = 0 }) => {
                         setTimeout(() => setShatters(prev => prev.filter(s => s.id !== id)), 600);
                     }
                 }
-            } else if (idx === currentIndex) {
-                noteHeadPaths.forEach(p => {
-                    p.style.fill = '#3b82f6';
-                    p.style.stroke = '#3b82f6';
-                });
-                if (noteHead) {
-                    noteHead.style.opacity = '1';
-                    noteHead.style.transform = 'translateY(0)';
-                }
-            } else {
-                noteHeadPaths.forEach(p => {
-                    p.style.fill = '#777';
-                    p.style.stroke = '#777';
-                });
-                if (noteHead) {
-                    noteHead.style.opacity = '1';
-                    noteHead.style.transform = 'translateY(0)';
-                }
-            }
-        });
+            });
 
-        prevIndexRef.current = currentIndex;
+            prevIndexRef.current = currentIndex;
+        };
+
+        // Gunakan requestAnimationFrame untuk memastikan SVG sudah ada di DOM
+        const animId = requestAnimationFrame(updateColors);
+        return () => cancelAnimationFrame(animId);
     }, [currentIndex, notes]);
 
     return (

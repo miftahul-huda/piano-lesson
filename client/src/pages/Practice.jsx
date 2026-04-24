@@ -1,12 +1,13 @@
 import React, { useState, useEffect, useRef } from 'react';
 import axios from 'axios';
-import { PitchDetector } from 'pitchfinder';
+import { AMDF } from 'pitchfinder';
 import MusicSheet from '../components/MusicSheet';
 import PianoKeyboard, { NOTES, NOTE_TO_FREQUENCY } from '../components/PianoKeyboard';
 import { Play, Square, Timer, Trophy, Mic, MicOff, Smartphone, X } from 'lucide-react';
 import confetti from 'canvas-confetti';
 import { useNavigate } from 'react-router-dom';
 import { QRCodeCanvas } from 'qrcode.react';
+import { motion, AnimatePresence } from 'framer-motion';
 
 const getClosestNote = (freq) => {
     let closest = null;
@@ -30,6 +31,7 @@ const Practice = () => {
     const [duration, setDuration] = useState(0);
     const [lastNoteTime, setLastNoteTime] = useState(0);
     const [isMicOn, setIsMicOn] = useState(false);
+    const [detectedNote, setDetectedNote] = useState(null);
     const [feedback, setFeedback] = useState(null); 
     const [showSummary, setShowSummary] = useState(false);
     
@@ -91,23 +93,18 @@ const Practice = () => {
         osc2.stop(now + 1.5);
     };
 
-    const handleNoteInput = (note) => {
-        playNote(note); 
+    const handleNoteInput = (note, isSilent = false) => {
+        if (!isSilent) playNote(note); 
         if (!isPlaying || currentNotes.length === 0) return;
 
         const targetNote = currentNotes[currentNoteIndex];
 
         if (note === targetNote) {
-            const timeTaken = (Date.now() - lastNoteTime) / 1000;
-            let points = 1;
-            if (timeTaken < 1.5) points = 3;
-            else if (timeTaken < 3) points = 2;
-
-            setScore(s => s + points);
+            setScore(s => s + 1);
             
             if (currentNoteIndex === currentNotes.length - 1) {
                 setFeedback('correct');
-                confetti({ particleCount: 50, spread: 60, origin: { y: 0.6 } });
+                confetti({ particleCount: 20, spread: 40, origin: { y: 0.6 } });
                 setTimeout(() => {
                     setFeedback(null);
                     generateNewNotes();
@@ -169,6 +166,13 @@ const Practice = () => {
         return () => clearInterval(timerRef.current);
     }, [isPlaying]);
 
+    // Auto-stop after 2 minutes (120 seconds)
+    useEffect(() => {
+        if (isPlaying && duration >= 120) {
+            handleStop();
+        }
+    }, [duration, isPlaying]);
+
     const generateNewNotes = () => {
         const startIndex = NOTES.findIndex(n => n.name === rangeStart);
         const endIndex = NOTES.findIndex(n => n.name === rangeEnd);
@@ -192,8 +196,18 @@ const Practice = () => {
     };
 
     const startMicrophone = async () => {
+        if (!window.isSecureContext) {
+            alert('Akses mikrofon hanya diizinkan di lingkungan aman (HTTPS atau localhost). Silakan gunakan HTTPS jika mengakses via IP.');
+            return;
+        }
+
         try {
             audioContextRef.current = new (window.AudioContext || window.webkitAudioContext)();
+            if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
+                alert('Browser Anda tidak mendukung akses media (getUserMedia).');
+                return;
+            }
+
             const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
             streamRef.current = stream;
             
@@ -203,24 +217,62 @@ const Practice = () => {
             source.connect(analyser);
             analyserRef.current = analyser;
 
-            const detectPitch = PitchDetector.forFloat32Array(analyser.fftSize);
+            const detectPitch = AMDF({ sampleRate: audioContextRef.current.sampleRate });
             const buffer = new Float32Array(analyser.fftSize);
+            let lastDetectedNote = null;
+            let detectionCount = 0;
 
             const update = () => {
                 analyser.getFloatTimeDomainData(buffer);
-                const pitch = detectPitch(buffer);
-                if (pitch) {
-                    const note = getClosestNote(pitch);
-                    if (note && handleNoteInputRef.current) {
-                        handleNoteInputRef.current(note);
-                    }
+                
+                // Hitung volume (RMS) untuk memastikan suara cukup keras
+                let sum = 0;
+                for (let i = 0; i < buffer.length; i++) {
+                    sum += buffer[i] * buffer[i];
                 }
+                const rms = Math.sqrt(sum / buffer.length);
+                
+                // Hanya deteksi jika volume > 0.01 (abaikan kebisingan kecil)
+                if (rms > 0.01) {
+                    const pitch = detectPitch(buffer);
+                    if (pitch) {
+                        const note = getClosestNote(pitch);
+                        if (note) {
+                            setDetectedNote(note); // Visualisasi real-time
+                            // Cek konsistensi: harus terdeteksi 3x berturut-turut
+                            if (note === lastDetectedNote) {
+                                detectionCount++;
+                                if (detectionCount === 3 && handleNoteInputRef.current) {
+                                    handleNoteInputRef.current(note, true);
+                                    detectionCount = 0; // Reset setelah berhasil
+                                }
+                            } else {
+                                lastDetectedNote = note;
+                                detectionCount = 1;
+                            }
+                        } else {
+                            setDetectedNote(null);
+                        }
+                    } else {
+                        setDetectedNote(null);
+                    }
+                } else {
+                    setDetectedNote(null);
+                }
+                
                 requestRef.current = requestAnimationFrame(update);
             };
             update();
             setIsMicOn(true);
         } catch (err) {
-            alert('Microphone access denied or not supported');
+            console.error('Microphone error:', err);
+            if (err.name === 'NotAllowedError') {
+                alert('Izin mikrofon ditolak. Silakan aktifkan di pengaturan browser.');
+            } else if (err.name === 'NotFoundError') {
+                alert('Mikrofon tidak ditemukan.');
+            } else {
+                alert('Gagal mengakses mikrofon: ' + err.message);
+            }
         }
     };
 
@@ -378,6 +430,7 @@ const Practice = () => {
                 <PianoKeyboard 
                     onKeyPress={handleNoteInput} 
                     lastPlayedNote={currentNotes.length > 0 && feedback === 'correct' ? currentNotes[currentNoteIndex] : null} 
+                    detectedNote={detectedNote}
                     rangeStart={rangeStart} 
                     rangeEnd={rangeEnd} 
                     showKeyNames={showKeyNames}
@@ -386,89 +439,115 @@ const Practice = () => {
             </div>
 
             {/* Modal QR Code */}
-            {showQR && (
-                <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/80 backdrop-blur-md p-4">
-                    <div className="glass p-8 max-sm w-full flex flex-col items-center gap-4 animate-float relative">
-                        <button 
-                            onClick={() => setShowQR(false)}
-                            className="absolute top-4 right-4 text-text-muted hover:text-text-main transition-colors"
+            {/* Modal QR Code */}
+            <AnimatePresence>
+                {showQR && (
+                    <motion.div 
+                        initial={{ opacity: 0 }}
+                        animate={{ opacity: 1 }}
+                        exit={{ opacity: 0 }}
+                        className="fixed inset-0 z-[100] flex items-center justify-center bg-black/80 backdrop-blur-md p-4"
+                    >
+                        <motion.div 
+                            initial={{ scale: 0.9, opacity: 0, y: 20 }}
+                            animate={{ scale: 1, opacity: 1, y: 0 }}
+                            className="glass p-8 max-sm w-full flex flex-col items-center gap-4 relative"
                         >
-                            <X size={24} />
-                        </button>
-                        
-                        <div className="bg-primary/20 p-3 rounded-full">
-                            <Smartphone size={24} className="text-primary" />
-                        </div>
-                        
-                        <div className="text-center">
-                            <h2 className="text-xl font-bold">Mobile Keyboard</h2>
-                            <p className="text-text-muted text-xs mt-1">Gunakan HP Anda sebagai keyboard piano lewat internet!</p>
-                        </div>
-
-                        {window.location.hostname === 'localhost' && (
-                            <div className="w-full flex flex-col gap-1">
-                                <label className="text-[10px] text-text-muted uppercase font-bold px-1">Computer IP Address (Local WiFi)</label>
-                                <input 
-                                    type="text"
-                                    placeholder="Contoh: 10.27.58.52"
-                                    value={manualIp}
-                                    onChange={(e) => setManualIp(e.target.value)}
-                                    className="bg-black/20 text-text-main p-2 rounded-lg text-sm focus:ring-2 ring-primary outline-none text-center"
-                                />
-                                <p className="text-[9px] text-text-muted italic px-1">Abaikan jika menggunakan ngrok.</p>
+                            <button 
+                                onClick={() => setShowQR(false)}
+                                className="absolute top-4 right-4 text-text-muted hover:text-text-main transition-colors"
+                            >
+                                <X size={24} />
+                            </button>
+                            
+                            <div className="bg-primary/20 p-3 rounded-full">
+                                <Smartphone size={24} className="text-primary" />
                             </div>
-                        )}
+                            
+                            <div className="text-center">
+                                <h2 className="text-xl font-bold">Mobile Keyboard</h2>
+                                <p className="text-text-muted text-xs mt-1">Gunakan HP Anda sebagai keyboard piano lewat internet!</p>
+                            </div>
 
-                        {effectiveIp && effectiveIp !== 'localhost' ? (
-                            <>
-                                <div className="bg-white p-3 rounded-xl shadow-xl">
-                                    <QRCodeCanvas value={remoteUrl} size={180} level="H" />
+                            {window.location.hostname === 'localhost' && (
+                                <div className="w-full flex flex-col gap-1">
+                                    <label className="text-[10px] text-text-muted uppercase font-bold px-1">Computer IP Address (Local WiFi)</label>
+                                    <input 
+                                        type="text"
+                                        placeholder="Contoh: 10.27.58.52"
+                                        value={manualIp}
+                                        onChange={(e) => setManualIp(e.target.value)}
+                                        className="bg-black/20 text-text-main p-2 rounded-lg text-sm focus:ring-2 ring-primary outline-none text-center"
+                                    />
+                                    <p className="text-[9px] text-text-muted italic px-1">Abaikan jika menggunakan ngrok.</p>
                                 </div>
-                                <div className="bg-black/20 p-2 rounded-lg w-full text-center overflow-hidden">
-                                    <code className="text-[10px] break-all text-text-muted">{remoteUrl}</code>
+                            )}
+
+                            {effectiveIp && effectiveIp !== 'localhost' ? (
+                                <>
+                                    <div className="bg-white p-3 rounded-xl shadow-xl">
+                                        <QRCodeCanvas value={remoteUrl} size={180} level="H" />
+                                    </div>
+                                    <div className="bg-black/20 p-2 rounded-lg w-full text-center overflow-hidden">
+                                        <code className="text-[10px] break-all text-text-muted">{remoteUrl}</code>
+                                    </div>
+                                    <p className="text-[10px] text-text-muted italic text-center">Scan QR ini di HP Anda. Mendukung koneksi internet/ngrok.</p>
+                                </>
+                            ) : (
+                                <div className="p-8 text-center text-error bg-error/10 rounded-xl border border-error/20">
+                                    <p className="text-sm font-bold">Domain/IP Belum Terdeteksi</p>
+                                    <p className="text-[10px] mt-1">Silakan buka lewat ngrok atau masukkan IP lokal di atas.</p>
                                 </div>
-                                <p className="text-[10px] text-text-muted italic text-center">Scan QR ini di HP Anda. Mendukung koneksi internet/ngrok.</p>
-                            </>
-                        ) : (
-                            <div className="p-8 text-center text-error bg-error/10 rounded-xl border border-error/20">
-                                <p className="text-sm font-bold">Domain/IP Belum Terdeteksi</p>
-                                <p className="text-[10px] mt-1">Silakan buka lewat ngrok atau masukkan IP lokal di atas.</p>
-                            </div>
-                        )}
+                            )}
 
-                        <button onClick={() => setShowQR(false)} className="btn-primary w-full py-2">Tutup</button>
-                    </div>
-                </div>
-            )}
+                            <button onClick={() => setShowQR(false)} className="btn-primary w-full py-2">Tutup</button>
+                        </motion.div>
+                    </motion.div>
+                )}
+            </AnimatePresence>
 
-            {showSummary && (
-                <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm p-4">
-                    <div className="glass p-8 max-w-sm w-full flex flex-col items-center gap-6 animate-float text-center">
-                        <div className="bg-yellow-400 p-4 rounded-full shadow-lg shadow-yellow-400/20">
-                            <Trophy size={48} className="text-white" />
-                        </div>
-                        <div>
-                            <h2 className="text-3xl font-bold">Session Complete!</h2>
-                            <p className="text-text-muted mt-2">Amazing progress today!</p>
-                        </div>
-                        <div className="flex gap-8 w-full border-y border-white/10 py-6">
-                            <div className="flex-1 flex flex-col items-center">
-                                <span className="text-xs text-text-muted uppercase font-bold">Final Score</span>
-                                <span className="text-3xl font-bold text-primary">{score}</span>
+            <AnimatePresence>
+                {showSummary && (
+                    <motion.div 
+                        initial={{ opacity: 0 }}
+                        animate={{ opacity: 1 }}
+                        exit={{ opacity: 0 }}
+                        className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm p-4"
+                    >
+                        <motion.div 
+                            initial={{ scale: 0.9, opacity: 0, y: 20 }}
+                            animate={{ scale: 1, opacity: 1, y: 0 }}
+                            className="glass p-8 max-w-sm w-full flex flex-col items-center gap-6 text-center"
+                        >
+                            <div className="bg-yellow-400 p-4 rounded-full shadow-lg shadow-yellow-400/20">
+                                <Trophy size={48} className="text-white" />
                             </div>
-                            <div className="flex-1 flex flex-col items-center">
-                                <span className="text-xs text-text-muted uppercase font-bold">Duration</span>
-                                <span className="text-3xl font-bold text-primary">
-                                    {Math.floor(duration / 60)}:{(duration % 60).toString().padStart(2, '0')}
-                                </span>
+                            
+                            <div>
+                                <h2 className="text-3xl font-bold">Session Complete!</h2>
+                                <p className="text-text-muted mt-2">Amazing progress today!</p>
                             </div>
-                        </div>
-                        <button onClick={() => navigate('/dashboard')} className="btn-primary w-full">
-                            Ok
-                        </button>
-                    </div>
-                </div>
-            )}
+
+                            <div className="flex gap-8 w-full border-y border-white/10 py-6">
+                                <div className="flex-1 flex flex-col items-center">
+                                    <span className="text-xs text-text-muted uppercase font-bold">Final Score</span>
+                                    <span className="text-3xl font-bold text-primary">{score}</span>
+                                </div>
+                                <div className="flex-1 flex flex-col items-center">
+                                    <span className="text-xs text-text-muted uppercase font-bold">Duration</span>
+                                    <span className="text-3xl font-bold text-primary">
+                                        {Math.floor(duration / 60)}:{(duration % 60).toString().padStart(2, '0')}
+                                    </span>
+                                </div>
+                            </div>
+                            
+                            <button onClick={() => navigate('/dashboard')} className="btn-primary w-full">
+                                Ok
+                            </button>
+                        </motion.div>
+                    </motion.div>
+                )}
+            </AnimatePresence>
 
             <style>{`
                 @keyframes shake {

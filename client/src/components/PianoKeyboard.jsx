@@ -26,7 +26,7 @@ const generateNotesAndFreqs = () => {
 
 const { notes: NOTES, freqs: NOTE_TO_FREQUENCY } = generateNotesAndFreqs();
 
-const PianoKeyboard = ({ onKeyPress, lastPlayedNote, rangeStart, rangeEnd, showKeyNames = true, showOctaves = true }) => {
+const PianoKeyboard = ({ onKeyPress, lastPlayedNote, detectedNote, rangeStart, rangeEnd, showKeyNames = true, showOctaves = true }) => {
     let displayNotes = NOTES;
     if (rangeStart && rangeEnd) {
         let startIndex = NOTES.findIndex(n => n.name === rangeStart);
@@ -45,6 +45,7 @@ const PianoKeyboard = ({ onKeyPress, lastPlayedNote, rangeStart, rangeEnd, showK
             {displayNotes.map((note, index) => {
                 const isBlack = note.type === 'black';
                 const isActive = lastPlayedNote === note.name;
+                const isDetected = detectedNote === note.name;
                 const isMiddleC = note.name === 'C4';
                 
                 return (
@@ -54,7 +55,7 @@ const PianoKeyboard = ({ onKeyPress, lastPlayedNote, rangeStart, rangeEnd, showK
                         className={`
                             cursor-pointer transition-all duration-75
                             ${isBlack ? 'bg-slate-900 w-8 h-28 -mx-4 z-10 rounded-b-md border border-slate-700' : `w-14 h-44 border border-slate-200 rounded-b-lg ${isMiddleC ? 'bg-amber-100 shadow-inner' : 'bg-white'}`}
-                            ${isActive ? '!bg-primary' : ''}
+                            ${isActive ? '!bg-success' : isDetected ? '!bg-cyan-400 opacity-90 scale-[0.98]' : ''}
                             hover:brightness-90 active:scale-95 flex items-end justify-center pb-4
                         `}
                         title={note.name}

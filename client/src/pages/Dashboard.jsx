@@ -8,9 +8,15 @@ const Dashboard = () => {
     const [loading, setLoading] = useState(true);
 
     useEffect(() => {
+        const token = localStorage.getItem('token');
+        if (!token) {
+            window.location.href = '/login';
+            return;
+        }
+
         const fetchData = async () => {
             try {
-                const config = { headers: { Authorization: `Bearer ${localStorage.getItem('token')}` } };
+                const config = { headers: { Authorization: `Bearer ${token}` } };
                 const [sessionsRes, highScoreRes] = await Promise.all([
                     axios.get('/api/sessions', config),
                     axios.get('/api/sessions/high-score', config)
@@ -18,7 +24,11 @@ const Dashboard = () => {
                 setSessions(sessionsRes.data);
                 setHighScore(highScoreRes.data.highScore);
             } catch (err) {
-                console.error('Failed to fetch dashboard data');
+                console.error('Failed to fetch dashboard data', err);
+                if (err.response?.status === 401) {
+                    localStorage.removeItem('token');
+                    window.location.href = '/login';
+                }
             } finally {
                 setLoading(false);
             }

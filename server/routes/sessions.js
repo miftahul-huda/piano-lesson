@@ -97,10 +97,21 @@ router.post('/', auth, async (req, res) => {
     });
 
     if (sessions.length > 10) {
-      const idsToDelete = sessions.slice(10).map(s => s.id);
-      await Session.destroy({
-        where: { id: idsToDelete }
+      // Cari session dengan skor tertinggi untuk dipertahankan
+      const maxScoreSession = sessions.reduce((prev, current) => {
+        return (prev.score > current.score) ? prev : current;
       });
+
+      // Hapus session lama (di luar 10 terbaru), tapi jangan hapus session skor tertinggi
+      const idsToDelete = sessions.slice(10)
+        .filter(s => s.id !== maxScoreSession.id)
+        .map(s => s.id);
+
+      if (idsToDelete.length > 0) {
+        await Session.destroy({
+          where: { id: idsToDelete }
+        });
+      }
     }
 
     res.status(201).json(session);

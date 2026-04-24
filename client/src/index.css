@@ -62,8 +62,8 @@ button {
 
 .glass {
   background: var(--color-bg-card);
-  backdrop-filter: blur(12px);
-  -webkit-backdrop-filter: blur(12px);
+  backdrop-filter: blur(8px); /* Kurangi dari 12px agar lebih ringan */
+  -webkit-backdrop-filter: blur(8px);
   border-radius: 1rem;
   transition: background-color 0.3s ease, border-color 0.3s ease;
 }
@@ -78,21 +78,14 @@ button {
 
 /* Animations */
 @keyframes float {
-  0% {
-    transform: translateY(0px);
-  }
-
-  50% {
-    transform: translateY(-10px);
-  }
-
-  100% {
-    transform: translateY(0px);
-  }
+  0% { transform: translateY(0px); }
+  50% { transform: translateY(-6px); } /* Kurangi jarak ayunan */
+  100% { transform: translateY(0px); }
 }
 
 .animate-float {
   animation: float 3s ease-in-out infinite;
+  will-change: transform; /* Optimasi GPU */
 }
 
 @keyframes shake {
