@@ -16,11 +16,13 @@
     "framer-motion": "^12.38.0",
     "jwt-decode": "^4.0.0",
     "lucide-react": "^1.9.0",
+    "opensheetmusicdisplay": "^1.9.7",
     "pitchfinder": "^2.3.4",
     "qrcode.react": "^4.2.0",
     "react": "^19.2.5",
     "react-dom": "^19.2.5",
     "react-router-dom": "^7.14.2",
+    "tone": "^15.1.22",
     "vexflow": "^5.0.0"
   },
   "devDependencies": {

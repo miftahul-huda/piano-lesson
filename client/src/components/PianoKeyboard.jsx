@@ -39,9 +39,14 @@ const PianoKeyboard = ({ onKeyPress, lastPlayedNote, detectedNote, rangeStart, r
         displayNotes = NOTES.slice(startIndex, endIndex + 1);
     }
 
+    const whiteNotesCount = displayNotes.filter(n => n.type === 'white').length;
+    // Tuts hitam biasanya ~65% lebar tuts putih
+    const whiteKeyWidthPercent = 100 / whiteNotesCount;
+    const blackKeyWidthPercent = whiteKeyWidthPercent * 0.65;
+
     return (
-        <div className="flex justify-center relative select-none mt-8 h-48 overflow-x-auto w-full pb-4 px-4 glass !rounded-2xl max-w-full pt-6 shadow-sm">
-            <div className="flex relative mx-auto">
+        <div className="flex justify-center relative select-none mt-8 h-52 w-full px-4 glass !rounded-2xl pt-6 shadow-sm overflow-hidden">
+            <div className="flex relative w-full h-full">
             {displayNotes.map((note, index) => {
                 const isBlack = note.type === 'black';
                 const isActive = lastPlayedNote === note.name;
@@ -52,16 +57,24 @@ const PianoKeyboard = ({ onKeyPress, lastPlayedNote, detectedNote, rangeStart, r
                     <div
                         key={note.name}
                         onClick={() => onKeyPress(note.name)}
+                        style={{ 
+                            width: isBlack ? `${blackKeyWidthPercent}%` : `${whiteKeyWidthPercent}%`,
+                            marginLeft: isBlack ? `-${blackKeyWidthPercent / 2}%` : '0',
+                            marginRight: isBlack ? `-${blackKeyWidthPercent / 2}%` : '0'
+                        }}
                         className={`
-                            cursor-pointer transition-all duration-75
-                            ${isBlack ? 'bg-slate-900 w-8 h-28 -mx-4 z-10 rounded-b-md border border-slate-700' : `w-14 h-44 border border-slate-200 rounded-b-lg ${isMiddleC ? 'bg-amber-100 shadow-inner' : 'bg-white'}`}
+                            cursor-pointer transition-all duration-75 relative
+                            ${isBlack ? 
+                                'bg-slate-900 h-28 z-10 rounded-b-sm border border-slate-700' : 
+                                `h-44 border border-slate-200 rounded-b-lg ${isMiddleC ? 'bg-amber-100 shadow-inner' : 'bg-white'}`
+                            }
                             ${isActive ? '!bg-success' : isDetected ? '!bg-cyan-400 opacity-90 scale-[0.98]' : ''}
                             hover:brightness-90 active:scale-95 flex items-end justify-center pb-4
                         `}
                         title={note.name}
                     >
                         {showKeyNames && !isBlack && (
-                            <span className={`text-xs font-bold ${isMiddleC ? 'text-amber-700' : 'text-slate-400'}`}>
+                            <span className={`text-[10px] font-bold truncate ${isMiddleC ? 'text-amber-700' : 'text-slate-400'}`}>
                                 {showOctaves ? note.name : note.name.replace(/\d+/, '')}
                             </span>
                         )}

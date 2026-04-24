@@ -3,11 +3,13 @@ const cors = require('cors');
 const sequelize = require('./config/database');
 const User = require('./models/User');
 const Session = require('./models/Session');
+const Score = require('./models/Score');
 require('dotenv').config();
 
 const authRoutes = require('./routes/auth');
 const sessionRoutes = require('./routes/sessions');
 const remoteRoutes = require('./routes/remote');
+const scoreRoutes = require('./routes/scores');
 
 const app = express();
 
@@ -32,6 +34,7 @@ app.use('/api-docs', swaggerUi.serve, swaggerUi.setup(specs));
 app.use('/api/auth', authRoutes);
 app.use('/api/sessions', sessionRoutes);
 app.use('/api/remote', remoteRoutes);
+app.use('/api/scores', scoreRoutes);
 
 // ERROR HANDLER
 app.use((err, req, res, next) => {

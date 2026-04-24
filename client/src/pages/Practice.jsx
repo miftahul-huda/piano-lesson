@@ -46,6 +46,8 @@ const Practice = () => {
     const [includeSemitones, setIncludeSemitones] = useState(false);
     const [noteCount, setNoteCount] = useState(1);
     const [showKeyNames, setShowKeyNames] = useState(true);
+    const [isFixedScore, setIsFixedScore] = useState(false);
+    const [scoreTitle, setScoreTitle] = useState(null);
 
     const timerRef = useRef();
     const pollRef = useRef();
@@ -105,10 +107,17 @@ const Practice = () => {
             if (currentNoteIndex === currentNotes.length - 1) {
                 setFeedback('correct');
                 confetti({ particleCount: 20, spread: 40, origin: { y: 0.6 } });
-                setTimeout(() => {
-                    setFeedback(null);
-                    generateNewNotes();
-                }, 500);
+                
+                if (isFixedScore) {
+                    setIsPlaying(false);
+                    setShowSummary(true);
+                    saveSession();
+                } else {
+                    setTimeout(() => {
+                        setFeedback(null);
+                        generateNewNotes();
+                    }, 500);
+                }
             } else {
                 setCurrentNoteIndex(idx => idx + 1);
                 setLastNoteTime(Date.now());
@@ -146,9 +155,34 @@ const Practice = () => {
         return () => clearInterval(pollRef.current);
     }, [sessionId]);
 
+    useEffect(() => {
+        const params = new URLSearchParams(window.location.search);
+        const scoreId = params.get('scoreId');
+        if (scoreId) {
+            const fetchScore = async () => {
+                try {
+                    const token = localStorage.getItem('token');
+                    const res = await axios.get(`/api/scores/${scoreId}`, {
+                        headers: { Authorization: `Bearer ${token}` }
+                    });
+                    if (res.data.notes) {
+                        setCurrentNotes(res.data.notes);
+                        setIsFixedScore(true);
+                        setScoreTitle(res.data.title);
+                    }
+                } catch (err) {
+                    console.error('Failed to fetch score');
+                }
+            };
+            fetchScore();
+        }
+    }, []);
+
     const handleStart = () => {
         setScore(0);
         setDuration(0);
+        setCurrentNoteIndex(0);
+        setFeedback(null);
         setShowSummary(false);
         setIsPlaying(true);
     };
@@ -158,7 +192,10 @@ const Practice = () => {
             timerRef.current = setInterval(() => {
                 setDuration(d => d + 1);
             }, 1000);
-            generateNewNotes();
+            
+            if (!isFixedScore) {
+                generateNewNotes();
+            }
         } else {
             clearInterval(timerRef.current);
             stopMicrophone();
@@ -398,8 +435,26 @@ const Practice = () => {
                     </div>
                 </div>
                 
-                <div className={`relative transition-all duration-300 min-h-[220px] flex items-center justify-center bg-[#fefbe8] rounded-3xl shadow-xl border-4 border-white overflow-hidden ${feedback === 'correct' ? 'scale-[1.02]' : feedback === 'wrong' ? 'shake' : ''}`}>
-                    <MusicSheet notes={currentNotes} currentIndex={currentNoteIndex} />
+                <div className={`relative transition-all duration-300 min-h-[300px] bg-[#fefbe8] rounded-3xl shadow-xl border-4 border-white overflow-hidden ${feedback === 'correct' ? 'scale-[1.02]' : feedback === 'wrong' ? 'shake' : ''}`}>
+                    {isPlaying ? (
+                        <div style={{ 
+                            position: 'absolute',
+                            left: '60%',
+                            top: '55%',
+                            transform: 'translate(-50%, -50%)',
+                            width: '480px',
+                            maxWidth: '95%'
+                        }}>
+                            <MusicSheet notes={currentNotes} currentIndex={currentNoteIndex} />
+                        </div>
+                    ) : (
+                        <div className="absolute inset-0 flex flex-col items-center justify-center gap-4 text-black/40 animate-pulse py-8">
+                            <Play size={64} fill="currentColor" className="opacity-10" />
+                            <p className="text-2xl font-bold tracking-tight">Please, click button Start</p>
+                            <p className="text-sm font-medium">Pilih jangkauan nada di atas lalu tekan Start untuk mulai latihan</p>
+                        </div>
+                    )}
+                    
                     {feedback === 'correct' && (
                         <div className="absolute inset-0 flex items-center justify-center bg-success/15 backdrop-blur-[1px] text-success font-black text-3xl z-[60]">
                             CORRECT!

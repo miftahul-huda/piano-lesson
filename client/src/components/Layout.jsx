@@ -1,14 +1,17 @@
 import React from 'react';
-import { Link, Outlet, useNavigate } from 'react-router-dom';
+import { Link, Outlet, useNavigate, useLocation } from 'react-router-dom';
 import { Music, LayoutDashboard, LogOut, Sun, Moon, Droplets } from 'lucide-react';
 import { useTheme } from '../context/ThemeContext';
 
 const Layout = () => {
     const navigate = useNavigate();
+    const location = useLocation();
     const { theme, setTheme } = useTheme();
     
     const userStr = localStorage.getItem('user');
     const user = userStr ? JSON.parse(userStr) : null;
+
+    const isActive = (path) => location.pathname === path;
 
     const handleLogout = () => {
         localStorage.removeItem('token');
@@ -24,10 +27,16 @@ const Layout = () => {
                     <span>PianoMaster</span>
                 </Link>
                 <nav className="flex items-center gap-6">
-                    <Link to="/practice" className="flex items-center gap-1 text-text-main no-underline hover:text-primary transition-colors">
+                    <Link to="/practice" className={`flex items-center gap-1 no-underline transition-all px-3 py-1.5 rounded-lg ${isActive('/practice') ? 'text-primary bg-primary/10 font-bold' : 'text-text-main hover:text-primary'}`}>
                         Practice
                     </Link>
-                    <Link to="/dashboard" className="flex items-center gap-1 text-text-main no-underline hover:text-primary transition-colors">
+                    <Link to="/collection" className={`flex items-center gap-1 no-underline transition-all px-3 py-1.5 rounded-lg ${isActive('/collection') ? 'text-primary bg-primary/10 font-bold' : 'text-text-main hover:text-primary'}`}>
+                        Collection
+                    </Link>
+                    <Link to="/upload" className={`flex items-center gap-1 no-underline transition-all px-3 py-1.5 rounded-lg ${isActive('/upload') ? 'text-primary bg-primary/10 font-bold' : 'text-text-main hover:text-primary'}`}>
+                        Upload
+                    </Link>
+                    <Link to="/dashboard" className={`flex items-center gap-1 no-underline transition-all px-3 py-1.5 rounded-lg ${isActive('/dashboard') ? 'text-primary bg-primary/10 font-bold' : 'text-text-main hover:text-primary'}`}>
                         <LayoutDashboard size={18} />
                         History
                     </Link>

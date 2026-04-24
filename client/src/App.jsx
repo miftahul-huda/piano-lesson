@@ -7,6 +7,9 @@ import Confirm from './pages/Confirm';
 import Dashboard from './pages/Dashboard';
 import Practice from './pages/Practice';
 import RemoteKeyboard from './pages/RemoteKeyboard';
+import UploadScore from './pages/UploadScore';
+import ScoreList from './pages/ScoreList';
+import ScoreDetail from './pages/ScoreDetail';
 import Layout from './components/Layout';
 import { ThemeProvider } from './context/ThemeContext';
 import './index.css';
@@ -30,6 +33,9 @@ const App = () => {
             <Route path="/" element={token ? <Navigate to="/practice" /> : <Navigate to="/login" />} />
             <Route path="/dashboard" element={token ? <Dashboard /> : <Navigate to="/login" />} />
             <Route path="/practice" element={token ? <Practice /> : <Navigate to="/login" />} />
+            <Route path="/upload" element={token ? <UploadScore /> : <Navigate to="/login" />} />
+            <Route path="/collection" element={token ? <ScoreList /> : <Navigate to="/login" />} />
+            <Route path="/score/:id" element={token ? <ScoreDetail /> : <Navigate to="/login" />} />
           </Route>
         </Routes>
       </Router>

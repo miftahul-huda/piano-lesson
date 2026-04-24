@@ -1,188 +1,135 @@
 import React, { useEffect, useRef, useState } from 'react';
-import { Renderer, Stave, StaveNote, Voice, Formatter, Accidental, StaveConnector, GhostNote } from 'vexflow';
+import { OpenSheetMusicDisplay } from 'opensheetmusicdisplay';
+import { generateMusicXML, SAMPLE_NOTES } from '../utils/musicXmlGenerator';
 import { motion, AnimatePresence } from 'framer-motion';
-
-const NoteShatter = ({ x, y }) => {
-    const particles = Array.from({ length: 6 }); // Kurangi partikel agar lebih ringan
-    return (
-        <div className="absolute pointer-events-none z-50" style={{ left: x, top: y }}>
-            {particles.map((_, i) => (
-                <motion.div
-                    key={i}
-                    initial={{ x: 0, y: 0, opacity: 1, scale: 1 }}
-                    animate={{
-                        x: (Math.random() - 0.5) * 80,
-                        y: (Math.random() - 0.5) * 80,
-                        opacity: 0,
-                        scale: 0.2
-                    }}
-                    transition={{ duration: 0.4, ease: "easeOut" }}
-                    className="absolute w-2 h-2 bg-success rounded-full shadow-sm"
-                    style={{ willChange: 'transform, opacity' }}
-                />
-            ))}
-        </div>
-    );
-};
 
 const MusicSheet = ({ notes = [], currentIndex = 0 }) => {
     const containerRef = useRef();
-    const [shatters, setShatters] = useState([]);
+    const osmdRef = useRef(null);
+    const [isLoaded, setIsLoaded] = useState(false);
     const prevIndexRef = useRef(currentIndex);
-    const lastBatchRef = useRef("");
-    const notePositionsRef = useRef([]);
 
-    // 1. Render Dasar VexFlow
+    // 1. Initialize and Load OSMD
     useEffect(() => {
-        const batchKey = notes.join(',');
-        if (batchKey === lastBatchRef.current) return;
-        lastBatchRef.current = batchKey;
-
         if (!containerRef.current) return;
+        
+        // Clean up previous instance
         containerRef.current.innerHTML = '';
-
-        const renderer = new Renderer(containerRef.current, Renderer.Backends.SVG);
-        const staveWidth = Math.max(240, notes.length * 65 + 100);
-        renderer.resize(staveWidth + 80, 200);
-        const context = renderer.getContext();
-
-        context.setStrokeStyle('#94a3b8');
-        context.setFillStyle('#94a3b8');
-
-        const staveTreble = new Stave(40, 10, staveWidth);
-        staveTreble.addClef('treble').addTimeSignature('4/4').setContext(context).draw();
-
-        const staveBass = new Stave(40, 90, staveWidth);
-        staveBass.addClef('bass').addTimeSignature('4/4').setContext(context).draw();
-
-        new StaveConnector(staveTreble, staveBass).setType(StaveConnector.type.BRACE).setContext(context).draw();
-
-        const localPositions = [];
-        const trebleTickables = [];
-        const bassTickables = [];
-
-        notes.forEach((noteStr, idx) => {
-            const hasAccidental = noteStr.includes('#');
-            const noteName = noteStr.charAt(0).toLowerCase();
-            const octave = parseInt(hasAccidental ? noteStr.charAt(2) : noteStr.charAt(1), 10);
-            const isBass = octave <= 3;
-
-            const vfNote = new StaveNote({
-                clef: isBass ? 'bass' : 'treble',
-                keys: [`${noteName}${hasAccidental ? '#' : ''}/${octave}`],
-                duration: 'q'
-            });
-
-            if (hasAccidental) vfNote.addModifier(new Accidental('#'), 0);
-
-            // Paksa ID dan Class masuk ke SVG DOM (VexFlow 5)
-            // VexFlow akan otomatis menambahkan prefix 'vf-' di depannya, jadi kita cukup beri 'note-idx'
-            vfNote.setAttribute('id', `note-${idx}`);
-            vfNote.setAttribute('class', `vf-note-group note-${idx}`);
-
-            vfNote.setStyle({ fillStyle: '#64748b', strokeStyle: '#64748b' });
-
-
-            if (isBass) {
-                bassTickables.push(vfNote);
-                trebleTickables.push(new GhostNote({ duration: 'q' }));
-            } else {
-                trebleTickables.push(vfNote);
-                bassTickables.push(new GhostNote({ duration: 'q' }));
-            }
-            localPositions.push({ note: vfNote, isBass, stave: isBass ? staveBass : staveTreble });
+        
+        const osmd = new OpenSheetMusicDisplay(containerRef.current, {
+            autoResize: true,
+            drawPartNames: false,
+            drawTitle: false,
+            drawSubtitle: false,
+            drawComposer: false,
+            drawLyricist: false,
+            drawMetronomeMarks: false,
+            renderBackend: 'svg',
+            coloringMode: 0,
+            colorNotes: false,
+            defaultColorNotehead: '#000000',
+            defaultColorRest: '#000000',
+            defaultColorStem: '#000000',
+            defaultColorLabel: '#000000',
+            defaultColorTitle: '#000000',
+            drawingParameters: 'compact',
+            fillParentWidth: false, // JANGAN paksa lebar penuh agar bisa di-center
         });
 
-        const formatter = new Formatter();
-        const voiceTreble = new Voice({ num_beats: notes.length, beat_value: 4 }).setStrict(false).addTickables(trebleTickables);
-        const voiceBass = new Voice({ num_beats: notes.length, beat_value: 4 }).setStrict(false).addTickables(bassTickables);
-        formatter.joinVoices([voiceTreble, voiceBass]).format([voiceTreble, voiceBass], staveWidth - 50);
+        osmdRef.current = osmd;
 
-        voiceTreble.draw(context, staveTreble);
-        voiceBass.draw(context, staveBass);
-
-        notePositionsRef.current = localPositions;
-        prevIndexRef.current = 0;
-    }, [notes]);
-
-    useEffect(() => {
-        const updateColors = () => {
-            if (!containerRef.current) return;
-
-            notes.forEach((_, idx) => {
-                // Cari berdasarkan ID yang dihasilkan VexFlow (otomatis diprefix 'vf-')
-                const noteEl = document.getElementById(`vf-note-${idx}`);
-                if (!noteEl) return;
-
-                const allPaths = noteEl.querySelectorAll('path, text, g');
-                const noteHead = noteEl.querySelector('.vf-notehead') || noteEl;
-
-                let targetColor = '#64748b'; // Slate 500
-                let targetOpacity = '1';
-                let targetTransform = 'translateY(0)';
-
-                if (idx < currentIndex) {
-                    targetColor = '#10b981'; // Success Green
-                    targetOpacity = '1'; // Tetap terlihat jelas
-                    targetTransform = 'translateY(0)'; // Tetap di posisi semula
-                }
-
-                allPaths.forEach(p => {
-                    p.style.fill = targetColor;
-                    p.style.stroke = targetColor;
-                    p.style.transition = 'all 0.3s ease';
-                    if (p.hasAttribute('fill')) p.setAttribute('fill', targetColor);
-                    if (p.hasAttribute('stroke')) p.setAttribute('stroke', targetColor);
-                });
-
-                if (noteHead) {
-                    noteHead.style.transition = 'all 0.8s ease-out';
-                    noteHead.style.opacity = targetOpacity;
-                    noteHead.style.transform = targetTransform;
-                }
-
-                // Shatter effect
-                if (idx === currentIndex - 1 && idx !== prevIndexRef.current - 1) {
-                    const data = notePositionsRef.current[idx];
-                    if (data && data.note.getMetrics) {
-                        const metrics = data.note.getMetrics();
-                        const line = data.note.getKeyProps()[0].line;
-                        const headY = data.stave.getYForLine(line);
-                        const id = Date.now();
-                        setShatters(prev => [...prev, { id, x: metrics.x + 40 + 7, y: headY }]);
-                        setTimeout(() => setShatters(prev => prev.filter(s => s.id !== id)), 600);
-                    }
+        // Use SAMPLE_NOTES if no notes provided to demonstrate capabilities
+        const notesToRender = notes.length > 0 ? notes : SAMPLE_NOTES;
+        const xml = generateMusicXML(notesToRender, "Piano Practice");
+        
+        osmd.load(xml).then(() => {
+            // Berikan sedikit margin agar tidak "dempet" tapi tetap bisa di-center
+            osmd.EngravingRules.PageLeftMargin = 5;
+            osmd.EngravingRules.PageRightMargin = 5;
+            osmd.EngravingRules.PageTopMargin = 5;
+            osmd.EngravingRules.PageBottomMargin = 5;
+            osmd.EngravingRules.RenderSingleHorizontalStaffline = false;
+            
+            // Gunakan requestAnimationFrame untuk memastikan browser sudah menghitung layout
+            requestAnimationFrame(() => {
+                if (containerRef.current && containerRef.current.offsetWidth > 0) {
+                    osmd.render();
+                    osmd.cursor.show();
+                    osmd.cursor.reset();
+                    setIsLoaded(true);
+                } else {
+                    const checkWidth = setInterval(() => {
+                        if (containerRef.current && containerRef.current.offsetWidth > 0) {
+                            osmd.render();
+                            osmd.cursor.show();
+                            osmd.cursor.reset();
+                            setIsLoaded(true);
+                            clearInterval(checkWidth);
+                        }
+                    }, 100);
                 }
             });
+        }).catch(err => {
+            console.error("OSMD Load Error:", err);
+        });
 
-            prevIndexRef.current = currentIndex;
+        return () => {
+            osmdRef.current = null;
         };
+    }, [notes]);
 
-        // Gunakan requestAnimationFrame untuk memastikan SVG sudah ada di DOM
-        const animId = requestAnimationFrame(updateColors);
-        return () => cancelAnimationFrame(animId);
-    }, [currentIndex, notes]);
+    // 2. Sync Cursor with currentIndex
+    useEffect(() => {
+        if (!osmdRef.current || !isLoaded) return;
+
+        const osmd = osmdRef.current;
+        if (!osmd.cursor) return; // Tambahkan safety check
+        
+        // Reset or Move Cursor
+        if (currentIndex === 0) {
+            osmd.cursor.reset();
+        } else if (currentIndex > prevIndexRef.current) {
+            // Move forward
+            const diff = currentIndex - prevIndexRef.current;
+            for (let i = 0; i < diff; i++) {
+                osmd.cursor.next();
+            }
+        } else if (currentIndex < prevIndexRef.current) {
+            // If jumped back, easier to reset and move forward
+            osmd.cursor.reset();
+            for (let i = 0; i < currentIndex; i++) {
+                osmd.cursor.next();
+            }
+        }
+
+        prevIndexRef.current = currentIndex;
+    }, [currentIndex, isLoaded]);
 
     return (
-        <div className="relative w-full flex justify-center py-4">
-            <div ref={containerRef}></div>
-            <div className="absolute inset-0 pointer-events-none overflow-visible">
-                <AnimatePresence>
-                    {shatters.map(s => (
-                        <NoteShatter key={s.id} x={s.x} y={s.y} />
-                    ))}
-                </AnimatePresence>
-            </div>
+        <div className="relative w-full py-4 min-h-[300px] flex items-center justify-center">
+            {!isLoaded && (
+                <div className="absolute inset-0 flex items-center justify-center bg-white/5 backdrop-blur-sm z-10 rounded-2xl">
+                    <div className="flex flex-col items-center gap-3">
+                        <div className="w-12 h-12 border-4 border-primary border-t-transparent rounded-full animate-spin"></div>
+                        <p className="text-text-muted font-medium">Menyusun Notasi...</p>
+                    </div>
+                </div>
+            )}
+            <div 
+                ref={containerRef} 
+                className={`w-full flex flex-col items-center justify-center transition-opacity duration-500 ${isLoaded ? 'opacity-100' : 'opacity-0'}`}
+                style={{ 
+                    filter: 'contrast(1.1) brightness(1.0)',
+                    backgroundColor: 'transparent'
+                }}
+            ></div>
+
             <style>{`
-                .vf-notehead {
-                    transition: all 0.3s ease;
-                    transform-origin: center;
-                }
- 
-                svg {
-                    user-select: none;
-                    -webkit-tap-highlight-color: transparent;
-                    outline: none;
+                /* Cursor styling */
+                .osmdCursor {
+                    opacity: 0.35 !important;
+                    background-color: #10b981 !important;
+                    border-radius: 4px;
                 }
             `}</style>
         </div>
