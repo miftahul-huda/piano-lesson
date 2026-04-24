@@ -1,0 +1,122 @@
+@import url('https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;600;700&display=swap');
+@import "tailwindcss";
+
+@theme {
+  --color-primary: var(--primary);
+  --color-primary-hover: var(--primary-hover);
+  --color-bg-dark: var(--bg-main);
+  --color-bg-card: var(--bg-card);
+  --color-text-main: var(--text-main);
+  --color-text-muted: var(--text-muted);
+  --color-accent: var(--accent);
+  --color-success: #10b981;
+  --color-error: #f43f5e;
+}
+
+:root,
+.theme-dark {
+  --primary: #8b5cf6;
+  --primary-hover: #1a73e8;
+  --bg-main: #0f172a;
+  --bg-card: rgba(30, 41, 59, 0.7);
+  --text-main: #f8fafc;
+  --text-muted: #94a3b8;
+  --accent: #22d3ee;
+  --border-glass: rgba(255, 255, 255, 0.1);
+}
+
+.theme-light {
+  --primary: #16a34a;
+  --primary-hover: #15803d;
+  --bg-main: #f0fdf4;
+  --bg-card: rgba(220, 252, 231, 0.8);
+  --text-main: #14532d;
+  --text-muted: #166534;
+  --accent: #22c55e;
+  --border-glass: rgba(22, 163, 74, 0.2);
+}
+
+.theme-ocean {
+  --primary: #0ea5e9;
+  --primary-hover: #0284c7;
+  --bg-main: #083344;
+  --bg-card: rgba(12, 74, 110, 0.6);
+  --text-main: #e0f2fe;
+  --text-muted: #7dd3fc;
+  --accent: #38bdf8;
+  --border-glass: rgba(56, 189, 248, 0.2);
+}
+
+body {
+  font-family: 'Outfit', sans-serif;
+  background-color: var(--color-bg-dark);
+  color: var(--color-text-main);
+  min-height: 100vh;
+  overflow-x: hidden;
+  transition: background-color 0.3s ease, color 0.3s ease;
+}
+
+button {
+  @apply cursor-pointer;
+}
+
+.glass {
+  background: var(--color-bg-card);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+  border-radius: 1rem;
+  transition: background-color 0.3s ease, border-color 0.3s ease;
+}
+
+.btn-primary {
+  @apply bg-primary text-white px-6 py-3 font-semibold rounded-lg transition-all duration-200 hover:bg-primary-hover hover:-translate-y-0.5 hover:shadow-lg hover:shadow-primary/40 active:scale-95 flex items-center justify-center gap-2;
+}
+
+.btn-outline {
+  @apply bg-transparent border border-primary text-primary px-6 py-3 rounded-lg transition-all hover:bg-primary hover:text-white flex items-center justify-center gap-2;
+}
+
+/* Animations */
+@keyframes float {
+  0% {
+    transform: translateY(0px);
+  }
+
+  50% {
+    transform: translateY(-10px);
+  }
+
+  100% {
+    transform: translateY(0px);
+  }
+}
+
+.animate-float {
+  animation: float 3s ease-in-out infinite;
+}
+
+@keyframes shake {
+
+  0%,
+  100% {
+    transform: translateX(0);
+  }
+
+  25% {
+    transform: translateX(-10px);
+  }
+
+  75% {
+    transform: translateX(10px);
+  }
+}
+
+.shake {
+  animation: shake 0.2s ease-in-out 0s 2;
+}
+
+
+.vf-stem path {
+  fill: #777 !important;
+  stroke: #777 !important;
+}
