@@ -2,7 +2,16 @@ import React, { useEffect, useRef, useState } from 'react';
 import { OpenSheetMusicDisplay } from 'opensheetmusicdisplay';
 import { generateMusicXML, SAMPLE_NOTES } from '../utils/musicXmlGenerator';
 
-const MusicSheet = ({ notes = [], currentIndex = 0, playingIndex = -1, playedUpTo = -1 }) => {
+const MusicSheet = ({ 
+    notes = [], 
+    currentIndex = 0, 
+    playingIndex = -1, 
+    playedUpTo = -1, 
+    showTimeSignature = true,
+    showClef = true,
+    showBrace = true,
+    showRest = true
+}) => {
     const containerRef = useRef();
     const osmdRef = useRef(null);
     const [isLoaded, setIsLoaded] = useState(false);
@@ -52,6 +61,8 @@ const MusicSheet = ({ notes = [], currentIndex = 0, playingIndex = -1, playedUpT
             drawComposer: false,
             drawLyricist: false,
             drawMetronomeMarks: false,
+            drawTimeSignatures: showTimeSignature,
+            drawClefs: showClef,
             renderBackend: 'svg',
             coloringMode: 0,  // No auto-coloring
             defaultColorNotehead: '#000000',
@@ -74,6 +85,10 @@ const MusicSheet = ({ notes = [], currentIndex = 0, playingIndex = -1, playedUpT
             osmd.EngravingRules.PageTopMargin = 5;
             osmd.EngravingRules.PageBottomMargin = 5;
             osmd.EngravingRules.RenderSingleHorizontalStaffline = false;
+            osmd.EngravingRules.RenderBraces = showBrace;
+            osmd.EngravingRules.RenderRests = showRest;
+            osmd.EngravingRules.RenderClefs = showClef;
+            osmd.EngravingRules.RenderTimeSignatures = showTimeSignature;
             
             requestAnimationFrame(() => {
                 const doRender = () => {
@@ -100,7 +115,7 @@ const MusicSheet = ({ notes = [], currentIndex = 0, playingIndex = -1, playedUpT
         });
 
         return () => { osmdRef.current = null; };
-    }, [notes]);
+    }, [notes, showTimeSignature, showClef, showBrace, showRest]);
 
     // 2. Color only the currently playing note; reset the previous one
     useEffect(() => {
@@ -187,7 +202,7 @@ const MusicSheet = ({ notes = [], currentIndex = 0, playingIndex = -1, playedUpT
     }, [currentIndex, isLoaded, playingIndex]);
 
     return (
-        <div className="relative w-full py-4 min-h-[300px] flex items-center justify-center">
+        <div className={`relative w-full py-4 min-h-[300px] flex items-center justify-center ${!showClef ? 'hide-clef' : ''} ${!showRest ? 'hide-rest' : ''} ${!showBrace ? 'hide-brace' : ''} ${!showTimeSignature ? 'hide-time' : ''}`}>
             {!isLoaded && (
                 <div className="absolute inset-0 flex items-center justify-center bg-white/5 backdrop-blur-sm z-10 rounded-2xl">
                     <div className="flex flex-col items-center gap-3">
@@ -208,6 +223,11 @@ const MusicSheet = ({ notes = [], currentIndex = 0, playingIndex = -1, playedUpT
                     background-color: #6366f1 !important;
                     border-radius: 4px;
                 }
+                /* Foolproof CSS hiding for clefs, rests, braces and time signatures */
+                .hide-clef svg .vf-clef, .hide-clef svg g[id*="clef"] { display: none !important; }
+                .hide-rest svg .vf-rest, .hide-rest svg g[id*="rest"] { display: none !important; }
+                .hide-brace svg .vf-staveconnector, .hide-brace svg g[id*="connector"] { display: none !important; }
+                .hide-time svg .vf-timesignature, .hide-time svg g[id*="time"] { display: none !important; }
             `}</style>
         </div>
     );

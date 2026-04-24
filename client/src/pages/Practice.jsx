@@ -8,6 +8,7 @@ import confetti from 'canvas-confetti';
 import { useNavigate } from 'react-router-dom';
 import { QRCodeCanvas } from 'qrcode.react';
 import { motion, AnimatePresence } from 'framer-motion';
+import * as Tone from 'tone';
 
 const getClosestNote = (freq) => {
     let closest = null;
@@ -56,43 +57,43 @@ const Practice = () => {
     const streamRef = useRef();
     const requestRef = useRef();
     const handleNoteInputRef = useRef();
+    const synthRef = useRef();
+    const [isAudioReady, setIsAudioReady] = useState(false);
+
+    useEffect(() => {
+        // Inisialisasi sampler dengan suara piano asli (Salamander Grand Piano)
+        synthRef.current = new Tone.Sampler({
+            urls: {
+                A0: "A0.mp3", C1: "C1.mp3", "D#1": "Ds1.mp3", "F#1": "Fs1.mp3",
+                A1: "A1.mp3", C2: "C2.mp3", "D#2": "Ds2.mp3", "F#2": "Fs2.mp3",
+                A2: "A2.mp3", C3: "C3.mp3", "D#3": "Ds3.mp3", "F#3": "Fs3.mp3",
+                A3: "A3.mp3", C4: "C4.mp3", "D#4": "Ds4.mp3", "F#4": "Fs4.mp3",
+                A4: "A4.mp3", C5: "C5.mp3", "D#5": "Ds5.mp3", "F#5": "Fs5.mp3",
+                A5: "A5.mp3", C6: "C6.mp3", "D#6": "Ds6.mp3", "F#6": "Fs6.mp3",
+                A6: "A6.mp3", C7: "C7.mp3", "D#7": "Ds7.mp3", "F#7": "Fs7.mp3",
+                A7: "A7.mp3", C8: "C8.mp3"
+            },
+            release: 1,
+            baseUrl: "https://tonejs.github.io/audio/salamander/",
+            onload: () => {
+                setIsAudioReady(true);
+            }
+        }).toDestination();
+
+        return () => {
+            if (synthRef.current) synthRef.current.dispose();
+        };
+    }, []);
 
     const playNote = (note) => {
-        if (!audioContextRef.current) {
-            audioContextRef.current = new (window.AudioContext || window.webkitAudioContext)();
+        if (!synthRef.current || !isAudioReady) return;
+        
+        try {
+            Tone.start();
+            synthRef.current.triggerAttackRelease(note, "2n");
+        } catch (err) {
+            console.error("Playback error:", err);
         }
-        
-        const freq = NOTE_TO_FREQUENCY[note];
-        if (!freq) return;
-
-        const now = audioContextRef.current.currentTime;
-        const masterGain = audioContextRef.current.createGain();
-        masterGain.gain.setValueAtTime(0, now);
-        masterGain.gain.linearRampToValueAtTime(0.4, now + 0.01); 
-        masterGain.gain.exponentialRampToValueAtTime(0.001, now + 1.5); 
-        
-        const filter = audioContextRef.current.createBiquadFilter();
-        filter.type = 'lowpass';
-        filter.frequency.setValueAtTime(1000, now);
-        filter.frequency.exponentialRampToValueAtTime(200, now + 1);
-
-        const osc1 = audioContextRef.current.createOscillator();
-        const osc2 = audioContextRef.current.createOscillator();
-        
-        osc1.type = 'triangle';
-        osc1.frequency.setValueAtTime(freq, now);
-        osc2.type = 'sine';
-        osc2.frequency.setValueAtTime(freq * 2, now); 
-
-        osc1.connect(filter);
-        osc2.connect(filter);
-        filter.connect(masterGain);
-        masterGain.connect(audioContextRef.current.destination);
-        
-        osc1.start(now);
-        osc2.start(now);
-        osc1.stop(now + 1.5);
-        osc2.stop(now + 1.5);
     };
 
     const handleNoteInput = (note, isSilent = false) => {
@@ -239,7 +240,8 @@ const Practice = () => {
         }
 
         try {
-            audioContextRef.current = new (window.AudioContext || window.webkitAudioContext)();
+            await Tone.start();
+            audioContextRef.current = Tone.getContext().rawContext;
             if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
                 alert('Browser Anda tidak mendukung akses media (getUserMedia).');
                 return;
@@ -445,7 +447,15 @@ const Practice = () => {
                             width: '480px',
                             maxWidth: '95%'
                         }}>
-                            <MusicSheet notes={currentNotes} currentIndex={currentNoteIndex} playedUpTo={isPlaying ? currentNoteIndex - 1 : -1} />
+                            <MusicSheet 
+                                notes={currentNotes} 
+                                currentIndex={currentNoteIndex} 
+                                playedUpTo={isPlaying ? currentNoteIndex - 1 : -1} 
+                                showTimeSignature={false}
+                                showClef={true}
+                                showBrace={true}
+                                showRest={false}
+                            />
                         </div>
                     ) : (
                         <div className="absolute inset-0 flex flex-col items-center justify-center gap-4 text-black/40 animate-pulse py-8">
